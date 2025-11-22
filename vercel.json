@@ -1,15 +1,3 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "api/extract.js",
-            "use": "@vercel/node"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/api/extract",
-            "dest": "/api/extract.js"
-        }
-    ]
+    "version": 2
 }
