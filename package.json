@@ -1,0 +1,14 @@
+{
+  "name": "youtube-frame-extractor",
+  "version": "1.0.0",
+  "description": "Serverless function to extract frames from YouTube videos",
+  "main": "api/extract.js",
+  "scripts": {
+    "test": "node test-local.js"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.13.5",
+    "fluent-ffmpeg": "^2.1.2",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0"
+  }
+}
