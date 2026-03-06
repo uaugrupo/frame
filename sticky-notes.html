@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sticky Notes</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  #sticky-widget {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    background: #f0f0f0;
+    background-image:
+      radial-gradient(circle, #ccc 1px, transparent 1px);
+    background-size: 24px 24px;
+    overflow: auto;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    cursor: crosshair;
+  }
+
+  .hint {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.55);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity .4s;
+  }
+
+  .sticky-note {
+    position: absolute;
+    width: 220px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    box-shadow: 2px 4px 12px rgba(0,0,0,.18);
+    animation: pop .2s ease-out;
+    z-index: 2;
+    transition: box-shadow .2s;
+  }
+  .sticky-note:hover { box-shadow: 3px 6px 18px rgba(0,0,0,.25); }
+  .sticky-note.dragging { box-shadow: 6px 10px 24px rgba(0,0,0,.3); z-index: 100; }
+
+  @keyframes pop {
+    0%   { transform: scale(.6); opacity: 0; }
+    100% { transform: scale(1);  opacity: 1; }
+  }
+
+  .sticky-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    cursor: grab;
+    border-bottom: 1px solid rgba(0,0,0,.08);
+    border-radius: 4px 4px 0 0;
+    user-select: none;
+  }
+  .sticky-header:active { cursor: grabbing; }
+
+  .sticky-header .color-dots {
+    display: flex;
+    gap: 5px;
+  }
+  .color-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,.15);
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  .color-dot:hover { transform: scale(1.25); }
+
+  .btn-delete {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: rgba(0,0,0,.4);
+    line-height: 1;
+    padding: 0 2px;
+    transition: color .15s;
+  }
+  .btn-delete:hover { color: #d32f2f; }
+
+  .sticky-body {
+    flex: 1;
+    padding: 10px;
+  }
+
+  .sticky-body textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 120px;
+    border: none;
+    background: transparent;
+    resize: vertical;
+    font-family: 'Patrick Hand', 'Segoe UI', cursive, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #333;
+    outline: none;
+  }
+
+  .sticky-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px 8px 6px;
+  }
+
+  .btn-save {
+    background: rgba(0,0,0,.12);
+    border: none;
+    padding: 4px 14px;
+    border-radius: 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #333;
+    font-weight: 600;
+    transition: background .15s;
+  }
+  .btn-save:hover { background: rgba(0,0,0,.2); }
+
+  .saved-indicator {
+    font-size: 11px;
+    color: rgba(0,0,0,.4);
+    align-self: center;
+    margin-right: 8px;
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .saved-indicator.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="sticky-widget">
+  <div class="hint" id="hint">Clique em qualquer lugar para criar uma nota</div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'sticky_notes_data';
+  const widget = document.getElementById('sticky-widget');
+  const hint = document.getElementById('hint');
+
+  const COLORS = [
+    '#FDFD96', // yellow
+    '#FFB7B2', // pink
+    '#B5EAD7', // green
+    '#C7CEEA', // blue
+    '#FFDAC1', // orange
+  ];
+
+  // ── Persistence ──────────────────────────────────
+  function loadNotes() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch { return []; }
+  }
+
+  function saveAll() {
+    const notes = [];
+    widget.querySelectorAll('.sticky-note').forEach(el => {
+      notes.push({
+        id: el.dataset.id,
+        x: parseInt(el.style.left),
+        y: parseInt(el.style.top),
+        color: el.dataset.color,
+        text: el.querySelector('textarea').value,
+      });
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  }
+
+  // ── Create note ──────────────────────────────────
+  function createNote({ id, x, y, color, text } = {}) {
+    id = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    color = color || COLORS[0];
+    text = text || '';
+
+    const note = document.createElement('div');
+    note.className = 'sticky-note';
+    note.dataset.id = id;
+    note.dataset.color = color;
+    note.style.left = x + 'px';
+    note.style.top = y + 'px';
+    note.style.background = color;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'sticky-header';
+
+    const dots = document.createElement('div');
+    dots.className = 'color-dots';
+    COLORS.forEach(c => {
+      const dot = document.createElement('span');
+      dot.className = 'color-dot';
+      dot.style.background = c;
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        note.style.background = c;
+        note.dataset.color = c;
+        saveAll();
+      });
+      dots.appendChild(dot);
+    });
+
+    const btnDel = document.createElement('button');
+    btnDel.className = 'btn-delete';
+    btnDel.innerHTML = '&times;';
+    btnDel.title = 'Excluir nota';
+    btnDel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      note.style.animation = 'none';
+      note.style.transition = 'transform .2s, opacity .2s';
+      note.style.transform = 'scale(.5)';
+      note.style.opacity = '0';
+      setTimeout(() => { note.remove(); saveAll(); updateHint(); }, 200);
+    });
+
+    header.appendChild(dots);
+    header.appendChild(btnDel);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'sticky-body';
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Escreva sua nota...';
+    textarea.value = text;
+    textarea.addEventListener('click', e => e.stopPropagation());
+    textarea.addEventListener('input', () => { saved.classList.remove('show'); });
+    body.appendChild(textarea);
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.className = 'sticky-footer';
+    const saved = document.createElement('span');
+    saved.className = 'saved-indicator';
+    saved.textContent = 'Salvo ✓';
+    const btnSave = document.createElement('button');
+    btnSave.className = 'btn-save';
+    btnSave.textContent = 'Salvar';
+    btnSave.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveAll();
+      saved.classList.add('show');
+      setTimeout(() => saved.classList.remove('show'), 2000);
+    });
+    footer.appendChild(saved);
+    footer.appendChild(btnSave);
+
+    note.appendChild(header);
+    note.appendChild(body);
+    note.appendChild(footer);
+
+    // ── Drag ────────────────────────────────────
+    let isDragging = false, startX, startY, origX, origY;
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.color-dot') || e.target.closest('.btn-delete')) return;
+      isDragging = true;
+      note.classList.add('dragging');
+      startX = e.clientX;
+      startY = e.clientY;
+      origX = parseInt(note.style.left);
+      origY = parseInt(note.style.top);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      note.style.left = (origX + e.clientX - startX) + 'px';
+      note.style.top  = (origY + e.clientY - startY) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        note.classList.remove('dragging');
+        saveAll();
+      }
+    });
+
+    // Prevent widget click from creating new note
+    note.addEventListener('click', e => e.stopPropagation());
+
+    widget.appendChild(note);
+    textarea.focus();
+    updateHint();
+    return note;
+  }
+
+  // ── Widget click → new note ──────────────────────
+  widget.addEventListener('click', (e) => {
+    if (e.target !== widget) return;
+    const rect = widget.getBoundingClientRect();
+    let x = e.clientX - rect.left + widget.scrollLeft - 110;
+    let y = e.clientY - rect.top + widget.scrollTop - 20;
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    createNote({ x, y });
+    saveAll();
+  });
+
+  function updateHint() {
+    const count = widget.querySelectorAll('.sticky-note').length;
+    hint.style.opacity = count === 0 ? '1' : '0';
+  }
+
+  // ── Init: restore saved notes ────────────────────
+  loadNotes().forEach(n => createNote(n));
+  updateHint();
+})();
+</script>
+
+</body>
+</html>
