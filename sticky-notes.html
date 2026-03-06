@@ -140,6 +140,163 @@
     transition: opacity .3s;
   }
   .saved-indicator.show { opacity: 1; }
+
+  /* ── Connect Button ────────────────────────── */
+  .btn-connect {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #333;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .2s, transform .1s;
+    box-shadow: 0 2px 10px rgba(0,0,0,.2);
+  }
+  .btn-connect:hover { background: #555; }
+  .btn-connect:active { transform: scale(.96); }
+  .btn-connect .icon-phone {
+    font-size: 18px;
+  }
+  .btn-connect.connected {
+    background: #2e7d32;
+  }
+
+  /* ── QR Modal ──────────────────────────────── */
+  .qr-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s;
+  }
+  .qr-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .qr-modal {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    max-width: 380px;
+    width: 90%;
+    box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    transform: scale(.9);
+    transition: transform .3s;
+  }
+  .qr-overlay.open .qr-modal {
+    transform: scale(1);
+  }
+
+  .qr-modal h2 {
+    font-size: 20px;
+    color: #333;
+    margin-bottom: 4px;
+  }
+
+  .qr-modal p {
+    font-size: 13px;
+    color: #777;
+    margin-bottom: 20px;
+  }
+
+  .qr-modal .room-code {
+    display: inline-block;
+    background: #f0f0f0;
+    padding: 4px 16px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+  }
+
+  .qr-canvas-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  .qr-canvas-wrapper canvas {
+    border-radius: 8px;
+  }
+
+  .qr-status {
+    font-size: 12px;
+    color: #999;
+    margin-top: 8px;
+  }
+
+  .qr-status .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4caf50;
+    margin-right: 6px;
+    animation: pulse-dot 1.5s infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+  }
+
+  .btn-close-modal {
+    background: #f0f0f0;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #555;
+    font-weight: 600;
+    transition: background .15s;
+  }
+  .btn-close-modal:hover { background: #e0e0e0; }
+
+  .btn-disconnect {
+    background: #d32f2f;
+    color: #fff;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-left: 8px;
+    transition: background .15s;
+  }
+  .btn-disconnect:hover { background: #b71c1c; }
+
+  /* ── Remote note badge ─────────────────────── */
+  .remote-badge {
+    font-size: 10px;
+    background: rgba(0,0,0,.1);
+    padding: 1px 8px;
+    border-radius: 8px;
+    margin-left: 4px;
+    color: rgba(0,0,0,.45);
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -147,6 +304,30 @@
 <div id="sticky-widget">
   <div class="hint" id="hint">Clique em qualquer lugar para criar uma nota</div>
 </div>
+
+<button class="btn-connect" id="btnConnect">
+  <span class="icon-phone">&#128241;</span> Conectar
+</button>
+
+<div class="qr-overlay" id="qrOverlay">
+  <div class="qr-modal">
+    <h2>Conectar Celular</h2>
+    <p>Escaneie o QR Code abaixo para criar notas pelo celular</p>
+    <div class="room-code" id="roomCode">---</div>
+    <div class="qr-canvas-wrapper">
+      <canvas id="qrCanvas"></canvas>
+    </div>
+    <div class="qr-status">
+      <span class="dot"></span> Aguardando notas...
+    </div>
+    <div style="margin-top: 16px;">
+      <button class="btn-close-modal" id="btnCloseModal">Fechar</button>
+      <button class="btn-disconnect" id="btnDisconnect" style="display:none;">Desconectar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
 <script>
 (function () {
@@ -321,6 +502,112 @@
   // ── Init: restore saved notes ────────────────────
   loadNotes().forEach(n => createNote(n));
   updateHint();
+
+  // ── Remote Connect (QR Code) ───────────────────
+  const btnConnect = document.getElementById('btnConnect');
+  const qrOverlay = document.getElementById('qrOverlay');
+  const btnCloseModal = document.getElementById('btnCloseModal');
+  const btnDisconnect = document.getElementById('btnDisconnect');
+  const roomCodeEl = document.getElementById('roomCode');
+  const qrCanvas = document.getElementById('qrCanvas');
+
+  let currentRoomId = null;
+  let pollInterval = null;
+  let lastTimestamp = 0;
+
+  btnConnect.addEventListener('click', async () => {
+    if (currentRoomId) {
+      qrOverlay.classList.add('open');
+      return;
+    }
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create' })
+      });
+      const data = await res.json();
+      currentRoomId = data.roomId;
+      lastTimestamp = Date.now();
+
+      roomCodeEl.textContent = currentRoomId;
+      btnConnect.innerHTML = '<span class="icon-phone">&#128241;</span> Conectado';
+      btnConnect.classList.add('connected');
+      btnDisconnect.style.display = '';
+
+      const mobileUrl = window.location.origin + '/mobile.html?room=' + currentRoomId;
+      QRCode.toCanvas(qrCanvas, mobileUrl, {
+        width: 220,
+        margin: 2,
+        color: { dark: '#333', light: '#fff' }
+      });
+
+      qrOverlay.classList.add('open');
+      startPolling();
+    } catch (e) {
+      alert('Erro ao criar sala: ' + e.message);
+    }
+  });
+
+  btnCloseModal.addEventListener('click', () => {
+    qrOverlay.classList.remove('open');
+  });
+
+  qrOverlay.addEventListener('click', (e) => {
+    if (e.target === qrOverlay) qrOverlay.classList.remove('open');
+  });
+
+  btnDisconnect.addEventListener('click', () => {
+    stopPolling();
+    currentRoomId = null;
+    lastTimestamp = 0;
+    btnConnect.innerHTML = '<span class="icon-phone">&#128241;</span> Conectar';
+    btnConnect.classList.remove('connected');
+    btnDisconnect.style.display = 'none';
+    qrOverlay.classList.remove('open');
+  });
+
+  function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(pollNotes, 2000);
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  async function pollNotes() {
+    if (!currentRoomId) return;
+    try {
+      const res = await fetch('/api/rooms?roomId=' + currentRoomId + '&since=' + lastTimestamp);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.notes && data.notes.length > 0) {
+        data.notes.forEach(n => {
+          const existingNotes = widget.querySelectorAll('.sticky-note');
+          const count = existingNotes.length;
+          const col = count % 4;
+          const row = Math.floor(count / 4);
+          const x = 40 + col * 260;
+          const y = 40 + row * 220;
+          createNote({
+            id: n.id,
+            x,
+            y,
+            color: n.color,
+            text: n.text,
+          });
+        });
+        saveAll();
+      }
+      lastTimestamp = data.timestamp;
+    } catch (e) {
+      // silently ignore network errors during polling
+    }
+  }
 })();
 </script>
 

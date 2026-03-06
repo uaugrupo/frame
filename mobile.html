@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Criar Sticky Note</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f0f0;
+    background-image: radial-gradient(circle, #ccc 1px, transparent 1px);
+    background-size: 24px 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .title {
+    text-align: center;
+    margin-bottom: 24px;
+    color: #333;
+  }
+
+  .title h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .title p {
+    font-size: 13px;
+    color: #777;
+  }
+
+  .room-badge {
+    display: inline-block;
+    background: rgba(0,0,0,.1);
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: #555;
+    margin-top: 6px;
+  }
+
+  .note-preview {
+    width: 100%;
+    min-height: 220px;
+    border-radius: 6px;
+    box-shadow: 2px 4px 14px rgba(0,0,0,.18);
+    display: flex;
+    flex-direction: column;
+    transition: background .3s;
+    margin-bottom: 20px;
+  }
+
+  .note-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0,0,0,.08);
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(0,0,0,.12);
+    cursor: pointer;
+    transition: transform .15s, border-color .15s;
+  }
+
+  .color-dot:hover,
+  .color-dot.active {
+    transform: scale(1.2);
+    border-color: rgba(0,0,0,.4);
+  }
+
+  .note-body {
+    flex: 1;
+    padding: 12px;
+  }
+
+  .note-body textarea {
+    width: 100%;
+    min-height: 160px;
+    border: none;
+    background: transparent;
+    resize: vertical;
+    font-family: 'Patrick Hand', 'Segoe UI', cursive, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    color: #333;
+    outline: none;
+  }
+
+  .btn-send {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: #333;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, transform .1s;
+  }
+
+  .btn-send:hover { background: #555; }
+  .btn-send:active { transform: scale(.97); }
+  .btn-send:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #333;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: transform .3s ease;
+    z-index: 999;
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .error-screen {
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  .error-screen h2 {
+    color: #d32f2f;
+    margin-bottom: 8px;
+  }
+
+  .sent-list {
+    margin-top: 20px;
+  }
+
+  .sent-list h3 {
+    font-size: 14px;
+    color: #777;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  .sent-item {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #333;
+    box-shadow: 1px 2px 6px rgba(0,0,0,.1);
+    word-break: break-word;
+  }
+</style>
+</head>
+<body>
+
+<div class="container" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const roomId = params.get('room');
+  const app = document.getElementById('app');
+
+  if (!roomId) {
+    app.innerHTML = `
+      <div class="error-screen">
+        <h2>Link inválido</h2>
+        <p>Escaneie o QR Code na tela principal para se conectar.</p>
+      </div>`;
+    return;
+  }
+
+  const COLORS = ['#FDFD96', '#FFB7B2', '#B5EAD7', '#C7CEEA', '#FFDAC1'];
+  let selectedColor = COLORS[0];
+  const sentNotes = [];
+
+  function render() {
+    app.innerHTML = `
+      <div class="title">
+        <h1>Nova Sticky Note</h1>
+        <p>Sala: <span class="room-badge">${roomId}</span></p>
+      </div>
+
+      <div class="note-preview" id="notePreview" style="background: ${selectedColor}">
+        <div class="note-header" id="colorPicker">
+          ${COLORS.map(c =>
+            `<span class="color-dot ${c === selectedColor ? 'active' : ''}"
+                  style="background: ${c}" data-color="${c}"></span>`
+          ).join('')}
+        </div>
+        <div class="note-body">
+          <textarea id="noteText" placeholder="Escreva sua nota aqui...">${document.getElementById('noteText')?.value || ''}</textarea>
+        </div>
+      </div>
+
+      <button class="btn-send" id="btnSend">Enviar para a tela</button>
+
+      ${sentNotes.length > 0 ? `
+        <div class="sent-list">
+          <h3>Notas enviadas (${sentNotes.length})</h3>
+          ${sentNotes.map(n =>
+            `<div class="sent-item" style="background: ${n.color}">${n.text}</div>`
+          ).join('')}
+        </div>
+      ` : ''}
+    `;
+
+    // Color picker events
+    document.querySelectorAll('#colorPicker .color-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        selectedColor = dot.dataset.color;
+        const text = document.getElementById('noteText').value;
+        render();
+        document.getElementById('noteText').value = text;
+      });
+    });
+
+    // Send button
+    document.getElementById('btnSend').addEventListener('click', sendNote);
+  }
+
+  async function sendNote() {
+    const textarea = document.getElementById('noteText');
+    const text = textarea.value.trim();
+    if (!text) {
+      showToast('Escreva algo na nota!');
+      return;
+    }
+
+    const btn = document.getElementById('btnSend');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addNote',
+          roomId,
+          note: { text, color: selectedColor }
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao enviar');
+      }
+
+      sentNotes.unshift({ text, color: selectedColor });
+      showToast('Nota enviada!');
+      textarea.value = '';
+      render();
+    } catch (e) {
+      showToast('Erro: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Enviar para a tela';
+    }
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  render();
+})();
+</script>
+
+</body>
+</html>
