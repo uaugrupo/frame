@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sticky Notes</title>
+    <title>Sticky Notes Widget</title>
     <style>
         * {
             margin: 0;
@@ -29,10 +29,10 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 90vh;
-            max-height: 700px;
+            height: 600px;
         }
 
+        /* Header */
         .widget-header {
             background: linear-gradient(135deg, #0f3460, #533483);
             padding: 16px 20px;
@@ -120,6 +120,7 @@
             background: rgba(255, 255, 255, 0.25);
         }
 
+        /* Toolbar */
         .toolbar {
             background: rgba(255, 255, 255, 0.05);
             padding: 10px 20px;
@@ -164,6 +165,7 @@
             margin-left: auto;
         }
 
+        /* Canvas */
         .canvas {
             flex: 1;
             position: relative;
@@ -194,6 +196,7 @@
             font-size: 16px;
         }
 
+        /* Sticky Note */
         .sticky-note {
             position: absolute;
             width: 200px;
@@ -208,8 +211,14 @@
         }
 
         @keyframes popIn {
-            from { transform: scale(0.5); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .sticky-note:hover {
@@ -279,6 +288,7 @@
             color: rgba(0, 0, 0, 0.3);
         }
 
+        /* Toast Notification */
         .toast {
             position: fixed;
             bottom: 30px;
@@ -298,6 +308,7 @@
             transform: translateX(-50%) translateY(0);
         }
 
+        /* Saved counter */
         .saved-count {
             color: rgba(255, 255, 255, 0.5);
             font-size: 12px;
@@ -310,6 +321,7 @@
 <body>
 
 <div class="widget-container">
+    <!-- Header -->
     <div class="widget-header">
         <h2>Sticky Notes</h2>
         <div class="header-name">
@@ -336,6 +348,7 @@
         </div>
     </div>
 
+    <!-- Toolbar -->
     <div class="toolbar">
         <span>Cor:</span>
         <div class="color-options">
@@ -349,6 +362,7 @@
         <span class="hint">Clique no canvas para criar uma nota</span>
     </div>
 
+    <!-- Canvas -->
     <div class="canvas" id="canvas">
         <div class="canvas-empty" id="canvasEmpty">
             <div class="icon">+</div>
@@ -357,6 +371,7 @@
     </div>
 </div>
 
+<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -373,6 +388,7 @@
     let dragState = null;
     let justDragged = false;
 
+    // Color selection
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelector('.color-btn.active').classList.remove('active');
@@ -381,8 +397,12 @@
         });
     });
 
+    // Create note on canvas click
     canvas.addEventListener('click', (e) => {
-        if (justDragged) { justDragged = false; return; }
+        if (justDragged) {
+            justDragged = false;
+            return;
+        }
         if (e.target !== canvas && e.target !== canvasEmpty && !canvasEmpty.contains(e.target)) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -412,6 +432,7 @@
             <textarea placeholder="Escreva sua nota...">${escapeHtml(text)}</textarea>
         `;
 
+        // Delete
         note.querySelector('.sticky-delete').addEventListener('click', (e) => {
             e.stopPropagation();
             note.style.transform = 'scale(0)';
@@ -421,10 +442,10 @@
                 note.remove();
                 notes = notes.filter(n => n.id !== id);
                 updateCount();
-                if (canvas.querySelectorAll('.sticky-note').length === 0) showEmptyState();
             }, 200);
         });
 
+        // Drag
         const header = note.querySelector('.sticky-header');
         header.addEventListener('mousedown', startDrag);
         header.addEventListener('touchstart', startDragTouch, { passive: false });
@@ -435,6 +456,7 @@
         notes.push({ id, x, y, color, text, author });
         updateCount();
         hideEmptyState();
+
         return note;
     }
 
@@ -442,9 +464,18 @@
         e.preventDefault();
         const note = e.target.closest('.sticky-note');
         if (!note) return;
+
         note.classList.add('dragging');
         const rect = note.getBoundingClientRect();
-        dragState = { note, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top, moved: false };
+        const canvasRect = canvas.getBoundingClientRect();
+
+        dragState = {
+            note,
+            offsetX: e.clientX - rect.left,
+            offsetY: e.clientY - rect.top,
+            moved: false
+        };
+
         document.addEventListener('mousemove', onDrag);
         document.addEventListener('mouseup', endDrag);
     }
@@ -454,40 +485,70 @@
         const touch = e.touches[0];
         const note = e.target.closest('.sticky-note');
         if (!note) return;
+
         note.classList.add('dragging');
         const rect = note.getBoundingClientRect();
-        dragState = { note, offsetX: touch.clientX - rect.left, offsetY: touch.clientY - rect.top, moved: false };
+
+        dragState = {
+            note,
+            offsetX: touch.clientX - rect.left,
+            offsetY: touch.clientY - rect.top,
+            moved: false
+        };
+
         document.addEventListener('touchmove', onDragTouch, { passive: false });
         document.addEventListener('touchend', endDragTouch);
     }
 
-    function onDrag(e) { if (dragState) moveNote(e.clientX, e.clientY); }
-    function onDragTouch(e) { if (!dragState) return; e.preventDefault(); moveNote(e.touches[0].clientX, e.touches[0].clientY); }
+    function onDrag(e) {
+        if (!dragState) return;
+        moveNote(e.clientX, e.clientY);
+    }
+
+    function onDragTouch(e) {
+        if (!dragState) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        moveNote(touch.clientX, touch.clientY);
+    }
 
     function moveNote(clientX, clientY) {
         const canvasRect = canvas.getBoundingClientRect();
         let x = clientX - canvasRect.left + canvas.scrollLeft - dragState.offsetX;
         let y = clientY - canvasRect.top + canvas.scrollTop - dragState.offsetY;
-        dragState.note.style.left = Math.max(0, x) + 'px';
-        dragState.note.style.top = Math.max(0, y) + 'px';
+        x = Math.max(0, x);
+        y = Math.max(0, y);
+
+        dragState.note.style.left = x + 'px';
+        dragState.note.style.top = y + 'px';
         dragState.moved = true;
     }
 
     function endDrag() {
-        if (dragState) { dragState.note.classList.remove('dragging'); if (dragState.moved) justDragged = true; dragState = null; }
+        if (dragState) {
+            dragState.note.classList.remove('dragging');
+            if (dragState.moved) justDragged = true;
+            dragState = null;
+        }
         document.removeEventListener('mousemove', onDrag);
         document.removeEventListener('mouseup', endDrag);
     }
 
     function endDragTouch() {
-        if (dragState) { dragState.note.classList.remove('dragging'); if (dragState.moved) justDragged = true; dragState = null; }
+        if (dragState) {
+            dragState.note.classList.remove('dragging');
+            if (dragState.moved) justDragged = true;
+            dragState = null;
+        }
         document.removeEventListener('touchmove', onDragTouch);
         document.removeEventListener('touchend', endDragTouch);
     }
 
+    // Save
     btnSave.addEventListener('click', () => {
         const noteEls = canvas.querySelectorAll('.sticky-note');
         const data = [];
+
         noteEls.forEach(el => {
             data.push({
                 id: el.dataset.id,
@@ -498,13 +559,22 @@
                 author: el.querySelector('.sticky-author').textContent
             });
         });
-        localStorage.setItem('stickyNotesWidget', JSON.stringify({ userName: userNameInput.value, notes: data, savedAt: new Date().toISOString() }));
+
+        const saveData = {
+            userName: userNameInput.value,
+            notes: data,
+            savedAt: new Date().toISOString()
+        };
+
+        localStorage.setItem('stickyNotesWidget', JSON.stringify(saveData));
         showToast('Notas salvas com sucesso!');
     });
 
+    // Clear all
     btnClear.addEventListener('click', () => {
         if (canvas.querySelectorAll('.sticky-note').length === 0) return;
         if (!confirm('Limpar todas as notas?')) return;
+
         canvas.querySelectorAll('.sticky-note').forEach(n => n.remove());
         notes = [];
         updateCount();
@@ -513,14 +583,22 @@
         showToast('Todas as notas foram removidas');
     });
 
+    // Load saved notes
     function loadSaved() {
         const saved = localStorage.getItem('stickyNotesWidget');
         if (!saved) return;
+
         try {
             const data = JSON.parse(saved);
             if (data.userName) userNameInput.value = data.userName;
-            if (data.notes && data.notes.length > 0) data.notes.forEach(n => createNote(n.x, n.y, n.color, n.text, n.author));
-        } catch (e) { console.warn('Failed to load saved notes:', e); }
+            if (data.notes && data.notes.length > 0) {
+                data.notes.forEach(n => {
+                    createNote(n.x, n.y, n.color, n.text, n.author);
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to load saved notes:', e);
+        }
     }
 
     function updateCount() {
@@ -528,8 +606,13 @@
         noteCountEl.textContent = count + (count === 1 ? ' nota' : ' notas');
     }
 
-    function hideEmptyState() { canvasEmpty.style.display = 'none'; }
-    function showEmptyState() { canvasEmpty.style.display = 'block'; }
+    function hideEmptyState() {
+        canvasEmpty.style.display = 'none';
+    }
+
+    function showEmptyState() {
+        canvasEmpty.style.display = 'block';
+    }
 
     function showToast(msg) {
         toastEl.textContent = msg;
@@ -543,8 +626,11 @@
         return div.innerHTML;
     }
 
+    // Init
     loadSaved();
-    if (canvas.querySelectorAll('.sticky-note').length > 0) hideEmptyState();
+    if (canvas.querySelectorAll('.sticky-note').length > 0) {
+        hideEmptyState();
+    }
 </script>
 
 </body>
